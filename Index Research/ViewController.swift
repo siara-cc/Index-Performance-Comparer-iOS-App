@@ -25,7 +25,8 @@ class ViewController: UIViewController, UIPickerViewDelegate, UIPickerViewDataSo
     @IBOutlet weak var etIx2Get: UITextField!
     @IBOutlet weak var etIx3Get: UITextField!
     @IBOutlet weak var tvOut: UITextView!
-    
+    @IBOutlet weak var swART: UISwitch!
+
     var aDataSet: [String] = [String]()
     var aIdxSel: [String] = [String]()
     var aCharSet: [String] = [String]()
@@ -57,8 +58,8 @@ class ViewController: UIViewController, UIPickerViewDelegate, UIPickerViewDataSo
         self.pvIdxSel3.dataSource = self
         self.pvCharSet.delegate = self
         self.pvCharSet.dataSource = self
-        aDataSet = ["Use generated data", "Million domain names", "DB Pedia Labels"]
-        aIdxSel = ["basix", "bfox", "bfqx", "dfox", "dfos", "dfqx", "bft", "dft", "rb_tree"]
+        aDataSet = ["Generated data", "Million domain names", "DB Pedia Labels"]
+        aIdxSel = ["basix", "bfox", "bfqx", "dfox", "dfos", "dfqx", "bft", "dft", "linex", "none"]
         aCharSet = ["Printable", "a to z", "0 to 9", "Octet gap", "", "Random all|", "Seqential all"]
         vc = self
     }
@@ -78,6 +79,7 @@ class ViewController: UIViewController, UIPickerViewDelegate, UIPickerViewDataSo
                       Int32(self.pvCharSet.selectedRow(inComponent: 0)) + 1,
                       Int32(self.etKeyLen.text!)!,
                       Int32(self.etValueLen.text!)!,
+                      self.swART.isOn ? 1 : 0,
                       Bundle.main.bundlePath,
                       cb
             )
@@ -133,6 +135,7 @@ func cb(const_char_star: UnsafePointer<UInt8>!) -> Void{
     }
     DispatchQueue.main.async {
         vc.tvOut.text.append(s)
+        vc.tvOut.scrollRangeToVisible(NSMakeRange(vc.tvOut.text.count, 0))
         var s1 = s.range(of: "Get Time: ")
         if (s1 != nil) {
             if (s.starts(with: "ART")) {

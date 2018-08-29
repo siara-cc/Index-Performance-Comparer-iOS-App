@@ -7,8 +7,9 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
-		F4C444F820724C84005A3410 /* dbpedia_labels.txt in Resources */ = {isa = PBXBuildFile; fileRef = F4C444F620724C84005A3410 /* dbpedia_labels.txt */; };
-		F4C444F920724C84005A3410 /* domain_rank.csv in Resources */ = {isa = PBXBuildFile; fileRef = F4C444F720724C84005A3410 /* domain_rank.csv */; };
+		F408961B20EE37680033E4AC /* bfqs.cpp in Sources */ = {isa = PBXBuildFile; fileRef = F408961920EE37680033E4AC /* bfqs.cpp */; };
+		F41965B621324016006AE18B /* shuffled_domain_rank.csv in Resources */ = {isa = PBXBuildFile; fileRef = F41965B421323FA2006AE18B /* shuffled_domain_rank.csv */; };
+		F41965B721324016006AE18B /* unordered_dbpedia_labels.txt in Resources */ = {isa = PBXBuildFile; fileRef = F41965B521323FA2006AE18B /* unordered_dbpedia_labels.txt */; };
 		F4D0B594206F54D800BB968D /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = F4D0B593206F54D800BB968D /* AppDelegate.swift */; };
 		F4D0B596206F54D800BB968D /* ViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = F4D0B595206F54D800BB968D /* ViewController.swift */; };
 		F4D0B599206F54D800BB968D /* Main.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = F4D0B597206F54D800BB968D /* Main.storyboard */; };
@@ -48,8 +49,11 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
-		F4C444F620724C84005A3410 /* dbpedia_labels.txt */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = dbpedia_labels.txt; sourceTree = "<group>"; };
-		F4C444F720724C84005A3410 /* domain_rank.csv */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = domain_rank.csv; sourceTree = "<group>"; };
+		F408961920EE37680033E4AC /* bfqs.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; name = bfqs.cpp; path = ../../index_research/src/bfqs.cpp; sourceTree = "<group>"; };
+		F408961A20EE37680033E4AC /* bfqs.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = bfqs.h; path = ../../index_research/src/bfqs.h; sourceTree = "<group>"; };
+		F41965B421323FA2006AE18B /* shuffled_domain_rank.csv */ = {isa = PBXFileReference; lastKnownFileType = text; path = shuffled_domain_rank.csv; sourceTree = "<group>"; };
+		F41965B521323FA2006AE18B /* unordered_dbpedia_labels.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = unordered_dbpedia_labels.txt; sourceTree = "<group>"; };
+		F4C8D86A213238CB008AA7EF /* bplus_tree_handler.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = bplus_tree_handler.h; path = ../../index_research/src/bplus_tree_handler.h; sourceTree = "<group>"; };
 		F4D0B590206F54D800BB968D /* Index Research.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "Index Research.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 		F4D0B593206F54D800BB968D /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
 		F4D0B595206F54D800BB968D /* ViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ViewController.swift; sourceTree = "<group>"; };
@@ -77,7 +81,6 @@
 		F4D0B5CD206F615700BB968D /* bfos.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; name = bfos.cpp; path = ../../index_research/src/bfos.cpp; sourceTree = "<group>"; };
 		F4D0B5CE206F615700BB968D /* bft.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = bft.h; path = ../../index_research/src/bft.h; sourceTree = "<group>"; };
 		F4D0B5CF206F615700BB968D /* dft.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; name = dft.cpp; path = ../../index_research/src/dft.cpp; sourceTree = "<group>"; };
-		F4D0B5D0206F615700BB968D /* bplus_tree.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = bplus_tree.h; path = ../../index_research/src/bplus_tree.h; sourceTree = "<group>"; };
 		F4D0B5D1206F615700BB968D /* art.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; name = art.cpp; path = ../../index_research/src/art.cpp; sourceTree = "<group>"; };
 		F4D0B5D2206F615800BB968D /* dfos.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; name = dfos.cpp; path = ../../index_research/src/dfos.cpp; sourceTree = "<group>"; };
 		F4D0B5D3206F615800BB968D /* basix.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = basix.h; path = ../../index_research/src/basix.h; sourceTree = "<group>"; };
@@ -118,11 +121,11 @@
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
-		F4C444F520724C41005A3410 /* data */ = {
+		F41965B321323FA2006AE18B /* data */ = {
 			isa = PBXGroup;
 			children = (
-				F4C444F620724C84005A3410 /* dbpedia_labels.txt */,
-				F4C444F720724C84005A3410 /* domain_rank.csv */,
+				F41965B421323FA2006AE18B /* shuffled_domain_rank.csv */,
+				F41965B521323FA2006AE18B /* unordered_dbpedia_labels.txt */,
 			);
 			path = data;
 			sourceTree = "<group>";
@@ -130,7 +133,10 @@
 		F4D0B587206F54D800BB968D = {
 			isa = PBXGroup;
 			children = (
-				F4C444F520724C41005A3410 /* data */,
+				F41965B321323FA2006AE18B /* data */,
+				F4C8D86A213238CB008AA7EF /* bplus_tree_handler.h */,
+				F408961920EE37680033E4AC /* bfqs.cpp */,
+				F408961A20EE37680033E4AC /* bfqs.h */,
 				F4D0B5E8206F6F2000BB968D /* apple_invoker.cpp */,
 				F4D0B5E9206F6F2000BB968D /* apple_invoker.hpp */,
 				F4D0B5D1206F615700BB968D /* art.cpp */,
@@ -141,7 +147,6 @@
 				F4D0B5DB206F615A00BB968D /* bfos.h */,
 				F4D0B5C5206F615500BB968D /* bft.cpp */,
 				F4D0B5CE206F615700BB968D /* bft.h */,
-				F4D0B5D0206F615700BB968D /* bplus_tree.h */,
 				F4D0B5D2206F615800BB968D /* dfos.cpp */,
 				F4D0B5C6206F615500BB968D /* dfos.h */,
 				F4D0B5D9206F615A00BB968D /* dfox.cpp */,
@@ -315,8 +320,8 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				F4C444F920724C84005A3410 /* domain_rank.csv in Resources */,
-				F4C444F820724C84005A3410 /* dbpedia_labels.txt in Resources */,
+				F41965B621324016006AE18B /* shuffled_domain_rank.csv in Resources */,
+				F41965B721324016006AE18B /* unordered_dbpedia_labels.txt in Resources */,
 				F4D0B59B206F54D800BB968D /* Assets.xcassets in Resources */,
 				F4D0B599206F54D800BB968D /* Main.storyboard in Resources */,
 			);
@@ -348,6 +353,7 @@
 				F4D0B5DE206F615B00BB968D /* linex.cpp in Sources */,
 				F4D0B5DC206F615B00BB968D /* bft.cpp in Sources */,
 				F4D0B5E4206F615B00BB968D /* dfos.cpp in Sources */,
+				F408961B20EE37680033E4AC /* bfqs.cpp in Sources */,
 				F4D0B5DF206F615B00BB968D /* dfqx.cpp in Sources */,
 				F4D0B5E3206F615B00BB968D /* art.cpp in Sources */,
 				F4D0B5E6206F615B00BB968D /* rb_tree.cpp in Sources */,
@@ -412,6 +418,7 @@
 				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
 				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
 				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_DEBUG_INFORMATION_LEVEL = default;
 				CLANG_ENABLE_MODULES = YES;
 				CLANG_ENABLE_OBJC_ARC = YES;
 				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
@@ -435,12 +442,16 @@
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				CLANG_X86_VECTOR_INSTRUCTIONS = default;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
-				COPY_PHASE_STRIP = NO;
+				COPY_PHASE_STRIP = YES;
 				DEBUG_INFORMATION_FORMAT = dwarf;
+				ENABLE_BITCODE = NO;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
 				ENABLE_TESTABILITY = YES;
 				GCC_C_LANGUAGE_STANDARD = gnu11;
 				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_ENABLE_CPP_RTTI = NO;
+				GCC_GENERATE_DEBUGGING_SYMBOLS = YES;
+				GCC_INSTRUMENT_PROGRAM_FLOW_ARCS = NO;
 				GCC_NO_COMMON_BLOCKS = YES;
 				GCC_OPTIMIZATION_LEVEL = 0;
 				GCC_PREPROCESSOR_DEFINITIONS = (
@@ -455,8 +466,9 @@
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 9.0;
+				LLVM_LTO = NO;
 				MTL_ENABLE_DEBUG_INFO = YES;
-				ONLY_ACTIVE_ARCH = YES;
+				ONLY_ACTIVE_ARCH = NO;
 				SDKROOT = iphoneos;
 				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
 				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
@@ -471,6 +483,7 @@
 				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
 				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
 				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_DEBUG_INFORMATION_LEVEL = default;
 				CLANG_ENABLE_MODULES = YES;
 				CLANG_ENABLE_OBJC_ARC = YES;
 				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
@@ -494,11 +507,16 @@
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				CLANG_X86_VECTOR_INSTRUCTIONS = default;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
-				COPY_PHASE_STRIP = NO;
+				COPY_PHASE_STRIP = YES;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				ENABLE_BITCODE = NO;
 				ENABLE_NS_ASSERTIONS = NO;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
 				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_ENABLE_CPP_RTTI = NO;
+				GCC_GENERATE_DEBUGGING_SYMBOLS = YES;
+				GCC_INSTRUMENT_PROGRAM_FLOW_ARCS = NO;
 				GCC_NO_COMMON_BLOCKS = YES;
 				GCC_OPTIMIZATION_LEVEL = 3;
 				GCC_SYMBOLS_PRIVATE_EXTERN = NO;
@@ -509,7 +527,9 @@
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 9.0;
+				LLVM_LTO = NO;
 				MTL_ENABLE_DEBUG_INFO = NO;
+				ONLY_ACTIVE_ARCH = YES;
 				SDKROOT = iphoneos;
 				SWIFT_OPTIMIZATION_LEVEL = "-Owholemodule";
 				VALIDATE_PRODUCT = YES;
@@ -523,11 +543,12 @@
 				CLANG_ENABLE_MODULES = YES;
 				"CODE_SIGN_IDENTITY[sdk=iphoneos*]" = "iPhone Developer";
 				CODE_SIGN_STYLE = Automatic;
+				COPY_PHASE_STRIP = YES;
 				DEVELOPMENT_TEAM = 5S7E43LY85;
 				INFOPLIST_FILE = "Index Research/Info.plist";
 				IPHONEOS_DEPLOYMENT_TARGET = 9.0;
 				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/Frameworks";
-				ONLY_ACTIVE_ARCH = YES;
+				ONLY_ACTIVE_ARCH = NO;
 				PRODUCT_BUNDLE_IDENTIFIER = "cc.siara.Idx-Research";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				PROVISIONING_PROFILE_SPECIFIER = "";
@@ -545,11 +566,12 @@
 				CLANG_ENABLE_MODULES = YES;
 				"CODE_SIGN_IDENTITY[sdk=iphoneos*]" = "iPhone Developer";
 				CODE_SIGN_STYLE = Automatic;
+				COPY_PHASE_STRIP = YES;
 				DEVELOPMENT_TEAM = 5S7E43LY85;
 				INFOPLIST_FILE = "Index Research/Info.plist";
 				IPHONEOS_DEPLOYMENT_TARGET = 9.0;
 				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/Frameworks";
-				ONLY_ACTIVE_ARCH = NO;
+				ONLY_ACTIVE_ARCH = YES;
 				PRODUCT_BUNDLE_IDENTIFIER = "cc.siara.Idx-Research";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				PROVISIONING_PROFILE_SPECIFIER = "";

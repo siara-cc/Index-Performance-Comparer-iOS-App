@@ -28,8 +28,10 @@
 #include "bft.h"
 #include "dft.h"
 #include "bfos.h"
+#include "bfqs.h"
 #include "univix_util.h"
 #include "rb_tree.h"
+#include <sys/stat.h>
 
 using namespace std;
 
@@ -45,6 +47,7 @@ static volatile long NUM_ENTRIES = 100;
 static volatile int CHAR_SET = 2;
 static volatile int KEY_LEN = 8;
 static volatile int VALUE_LEN = 4;
+static volatile int USE_HASHTABLE = 0;
 static volatile int IDX2_SEL = 1;
 static volatile int IDX3_SEL = 2;
 static volatile int ctr = 0;
@@ -53,9 +56,10 @@ void print(const char *s, FN_SIG) {
     cb((const unsigned char *) s);
 }
 
-void insert(unordered_map<string, string>& m, FN_SIG) {
-    char k[100];
-    char v[100];
+size_t insert(unordered_map<string, string>& m, byte *data_buf, FN_SIG) {
+    char k[KEY_LEN + 1];
+    char v[VALUE_LEN + 1];
+    size_t ret = 0;
     srand48(time(NULL));
     for (unsigned long l = 0; l < NUM_ENTRIES; l++) {
         if (CHAR_SET == CS_PRINTABLE) {
@@ -109,20 +113,43 @@ void insert(unordered_map<string, string>& m, FN_SIG) {
             sprintf(out_str, "Key:'%s', Value: '%s'\n", k, v);
             print(out_str, cb);
         }
-        m.insert(pair<string, string>(k, v));
+        if (USE_HASHTABLE)
+            m.insert(pair<string, string>(k, v));
+        else {
+            data_buf[ret++] = KEY_LEN;
+            memcpy(data_buf + ret, k, KEY_LEN);
+            ret += KEY_LEN;
+            data_buf[ret++] = 0;
+            data_buf[ret++] = VALUE_LEN;
+            memcpy(data_buf + ret, v, VALUE_LEN);
+            ret += VALUE_LEN;
+            NUM_ENTRIES++;
+        }
     }
-    NUM_ENTRIES = m.size();
+    if (USE_HASHTABLE)
+        NUM_ENTRIES = m.size();
+    return ret;
 }
 
-void loadFile(unordered_map<string, string>& m, const char *filePath, FN_SIG) {
-    FILE *fp;
-    char key[2000];
-    char value[200];
-    char *buf;
-    int ctr = 0;
+int64_t getImportFileSize(const char *filePath) {
+    struct stat st;
     string fileName = string(filePath);
     fileName += "/";
-    fileName += (IMPORT_FILE == 1 ? "domain_rank.csv" : "dbpedia_labels.txt");
+    fileName += (IMPORT_FILE == 1 ? "shuffled_domain_rank.csv" : "unordered_dbpedia_labels.txt");
+    stat(fileName.c_str(), &st);
+    return st.st_size;
+}
+
+size_t loadFile(unordered_map<string, string>& m, byte *data_buf, const char *filePath, FN_SIG) {
+    FILE *fp;
+    char key[2000];
+    char value[255];
+    char *buf;
+    int ctr = 0;
+    size_t ret = 0;
+    string fileName = string(filePath);
+    fileName += "/";
+    fileName += (IMPORT_FILE == 1 ? "shuffled_domain_rank.csv" : "unordered_dbpedia_labels.txt");
     print(fileName.c_str(), cb);
     print("\n", cb);
     fp = fopen(fileName.c_str(), "r");
@@ -141,13 +168,35 @@ void loadFile(unordered_map<string, string>& m, const char *filePath, FN_SIG) {
             if (len > 0 && len <= KEY_LEN) {
                 //if (m[key].length() > 0)
                 //    cout << key << ":" << value << endl;
-                if (buf == value)
-                    m.insert(pair<string, string>(key, value));
-                else {
+                if (buf == value) {
+                    if (USE_HASHTABLE)
+                        m.insert(pair<string, string>(key, value));
+                    else {
+                        data_buf[ret++] = len;
+                        memcpy(data_buf + ret, key, len);
+                        ret += len;
+                        data_buf[ret++] = 0;
+                        len = strlen(value);
+                        data_buf[ret++] = len;
+                        memcpy(data_buf + ret, value, len);
+                        ret += len;
+                    }
+                } else {
                     sprintf(value, "%ld", NUM_ENTRIES);
                     //util::ptrToBytes(NUM_ENTRIES, (byte *) value);
                     //value[4] = 0;
-                    m.insert(pair<string, string>(key, value));
+                    if (USE_HASHTABLE)
+                        m.insert(pair<string, string>(key, value));
+                    else {
+                        data_buf[ret++] = len;
+                        memcpy(data_buf + ret, key, len);
+                        ret += len;
+                        data_buf[ret++] = 0;
+                        len = strlen(value);
+                        data_buf[ret++] = len;
+                        memcpy(data_buf + ret, value, len);
+                        ret += len;
+                    }
                 }
                 if (NUM_ENTRIES % 100000 == 0) {
                     char out_str[200];
@@ -165,10 +214,23 @@ void loadFile(unordered_map<string, string>& m, const char *filePath, FN_SIG) {
         }
     }
     if (key[0] != 0) {
-        m.insert(pair<string, string>(key, value));
+        if (USE_HASHTABLE)
+            m.insert(pair<string, string>(key, value));
+        else {
+            int16_t len = strlen(key);
+            data_buf[ret++] = len;
+            memcpy(data_buf + ret, key, len);
+            ret += len;
+            data_buf[ret++] = 0;
+            len = strlen(value);
+            data_buf[ret++] = len;
+            memcpy(data_buf + ret, value, len);
+            ret += len;
+        }
         NUM_ENTRIES++;
     }
     fclose(fp);
+    return ret;
 }
 
 long getTimeVal() {
@@ -187,8 +249,232 @@ double timedifference(long t0, long t1) {
 void initNative() {
 }
 
+void checkValue(const char *key, int key_len, const char *val, int val_len,
+                const char *returned_value, int returned_len, int& null_ctr, int& cmp) {
+    if (returned_value == null) {
+        null_ctr++;
+    } else {
+        int16_t d = util::compare(val, val_len, returned_value, returned_len);
+        if (d != 0) {
+            cmp++;
+            char value[256];
+            strncpy(value, returned_value, returned_len);
+            value[returned_len] = 0;
+            cout << cmp << ":" << (char *) key << "=========="
+            << val << "----------->" << returned_value << endl;
+        }
+    }
+}
+
+template<class T1, class T2>
+void runTests(bool isART, byte *data_buf, int64_t data_sz, bplus_tree_handler<T1> *lx, bplus_tree_handler<T2> *dx, unordered_map<string, string>& m, FN_SIG) {
+    char out_msg[200];
+    long start, stop;
+    unordered_map<string, string>::iterator it1;
+
+    art_tree at;
+    if (isART) {
+        ctr = 0;
+        art_tree_init(&at);
+        start = getTimeVal();
+        if (USE_HASHTABLE) {
+            it1 = m.begin();
+            for (; it1 != m.end(); ++it1) {
+                //cout << it1->first.c_str() << endl; //<< ":" << it1->second.c_str() << endl;
+                art_insert(&at, (unsigned char*) it1->first.c_str(),
+                           (int) it1->first.length() + 1, (void *) it1->second.c_str(),
+                           (int) it1->second.length());
+                ctr++;
+            }
+        } else {
+            for (int64_t pos = 0; pos < data_sz; pos++) {
+                byte key_len = data_buf[pos++];
+                byte value_len = data_buf[pos + key_len + 1];
+                art_insert(&at, data_buf + pos, key_len + 1, data_buf + pos + key_len + 2, value_len);
+                pos += key_len + value_len + 1;
+                ctr++;
+            }
+        }
+        stop = getTimeVal();
+        sprintf(out_msg, "ART Insert Time: %.3lf\n", timedifference(start, stop));
+        print(out_msg, cb);
+        //getchar();
+    }
+
+    if (lx != NULL) {
+        ctr = 0;
+        start = getTimeVal();
+        if (USE_HASHTABLE) {
+            it1 = m.begin();
+            for (; it1 != m.end(); ++it1) {
+                //cout << it1->first.c_str() << endl; //<< ":" << it1->second.c_str() << endl;
+                lx->put(it1->first.c_str(), it1->first.length(), it1->second.c_str(),
+                        it1->second.length());
+                ctr++;
+            }
+        } else {
+            for (int64_t pos = 0; pos < data_sz; pos++) {
+                byte key_len = data_buf[pos++];
+                byte value_len = data_buf[pos + key_len + 1];
+                lx->put((char *) data_buf + pos, key_len, (char *) data_buf + pos + key_len + 2, value_len);
+                pos += key_len + value_len + 1;
+                ctr++;
+            }
+        }
+        stop = getTimeVal();
+        sprintf(out_msg, "Ix1 Insert Time: %.3lf\n", timedifference(start, stop));
+        print(out_msg, cb);
+        //getchar();
+    }
+
+    if (dx != NULL) {
+        ctr = 0;
+        start = getTimeVal();
+        if (USE_HASHTABLE) {
+            it1 = m.begin();
+            for (; it1 != m.end(); ++it1) {
+                //cout << it1->first.c_str() << endl; //<< ":" << it1->second.c_str() << endl;
+                dx->put(it1->first.c_str(), it1->first.length(), it1->second.c_str(),
+                        it1->second.length());
+                ctr++;
+            }
+        } else {
+            for (int64_t pos = 0; pos < data_sz; pos++) {
+                byte key_len = data_buf[pos++];
+                byte value_len = data_buf[pos + key_len + 1];
+                dx->put((char *) data_buf + pos, key_len, (char *) data_buf + pos + key_len + 2, value_len);
+                pos += key_len + value_len + 1;
+                ctr++;
+            }
+        }
+        stop = getTimeVal();
+        sprintf(out_msg, "Ix2 Insert Time: %.3lf\n", timedifference(start, stop));
+        print(out_msg, cb);
+        //getchar();
+    }
+
+    int null_ctr = 0;
+    int cmp = 0;
+
+    if (isART) {
+        cmp = 0;
+        ctr = 0;
+        null_ctr = 0;
+        start = getTimeVal();
+        if (USE_HASHTABLE) {
+            it1 = m.begin();
+            for (; it1 != m.end(); ++it1) {
+                int len;
+                char *value = (char *) art_search(&at,
+                                                  (unsigned char*) it1->first.c_str(), (int) it1->first.length() + 1,
+                                                  &len);
+                checkValue(it1->first.c_str(), (int) it1->first.length() + 1,
+                           it1->second.c_str(), (int) it1->second.length(), value, len, null_ctr, cmp);
+                ctr++;
+            }
+        } else {
+            for (int64_t pos = 0; pos < data_sz; pos++) {
+                int len;
+                byte key_len = data_buf[pos++];
+                byte value_len = data_buf[pos + key_len + 1];
+                char *value = (char *) art_search(&at, data_buf + pos, key_len + 1, &len);
+                checkValue((char *) data_buf + pos, key_len + 1,
+                           (char *) data_buf + pos + key_len + 2, value_len, value, len, null_ctr, cmp);
+                pos += key_len + value_len + 1;
+                ctr++;
+            }
+        }
+        stop = getTimeVal();
+        sprintf(out_msg, "ART Get Time: %.3lf\n", timedifference(start, stop));
+        print(out_msg, cb);
+        sprintf(out_msg, "Null: %d, Cmp: %d\n", null_ctr, cmp);
+        print(out_msg, cb);
+        //getchar();
+    }
+
+    if (lx != NULL) {
+        cmp = 0;
+        ctr = 0;
+        null_ctr = 0;
+        it1 = m.begin();
+        start = getTimeVal();
+        if (USE_HASHTABLE) {
+            for (; it1 != m.end(); ++it1) {
+                int16_t len;
+                char *value = lx->get(it1->first.c_str(), it1->first.length(), &len);
+                checkValue(it1->first.c_str(), (int) it1->first.length() + 1,
+                           it1->second.c_str(), (int) it1->second.length(), value, len, null_ctr, cmp);
+                ctr++;
+            }
+        } else {
+            for (int64_t pos = 0; pos < data_sz; pos++) {
+                int16_t len;
+                byte key_len = data_buf[pos++];
+                byte value_len = data_buf[pos + key_len + 1];
+                char *value = lx->get((char *) data_buf + pos, key_len, &len);
+                checkValue((char *) data_buf + pos, key_len,
+                           (char *) data_buf + pos + key_len + 2, value_len, value, len, null_ctr, cmp);
+                pos += key_len + value_len + 1;
+                ctr++;
+            }
+        }
+        stop = getTimeVal();
+        
+        sprintf(out_msg, "Ix1 Get Time: %.3lf\n", timedifference(start, stop));
+        print(out_msg, cb);
+        sprintf(out_msg, "Null: %d, Cmp: %d\n", null_ctr, cmp);
+        print(out_msg, cb);
+        lx->printStats(NUM_ENTRIES);
+        lx->printNumLevels();
+        lx->printCounts();
+        sprintf(out_msg, "Root filled size: %d\n", util::getInt(lx->root_block + 1));
+        print(out_msg, cb);
+    }
+
+    if (dx != NULL) {
+        cmp = 0;
+        ctr = 0;
+        null_ctr = 0;
+        //bfos::count = 0;
+        it1 = m.begin();
+        start = getTimeVal();
+        if (USE_HASHTABLE) {
+            for (; it1 != m.end(); ++it1) {
+                int16_t len;
+                char *value = dx->get(it1->first.c_str(), it1->first.length(), &len);
+                checkValue(it1->first.c_str(), (int) it1->first.length() + 1,
+                           it1->second.c_str(), (int) it1->second.length(), value, len, null_ctr, cmp);
+                ctr++;
+            }
+        } else {
+            for (int64_t pos = 0; pos < data_sz; pos++) {
+                int16_t len;
+                byte key_len = data_buf[pos++];
+                byte value_len = data_buf[pos + key_len + 1];
+                char *value = dx->get((char *) data_buf + pos, key_len, &len);
+                checkValue((char *) data_buf + pos, key_len,
+                           (char *) data_buf + pos + key_len + 2, value_len, value, len, null_ctr, cmp);
+                pos += key_len + value_len + 1;
+                ctr++;
+            }
+        }
+        stop = getTimeVal();
+        sprintf(out_msg, "Ix2 Get Time: %.3lf\n", timedifference(start, stop));
+        print(out_msg, cb);
+        sprintf(out_msg, "Null: %d, Cmp: %d\n", null_ctr, cmp);
+        print(out_msg, cb);
+        dx->printStats(NUM_ENTRIES);
+        dx->printNumLevels();
+        dx->printCounts();
+        sprintf(out_msg, "Root filled size: %d\n", util::getInt(dx->root_block + 1));
+        print(out_msg, cb);
+        //getchar();
+    }
+
+}
+
 void runNative(int data_sel, int idx2_sel, int idx3_sel, int idx_len,
-               long num_entries, int char_set, int key_len, int value_len,
+               long num_entries, int char_set, int key_len, int value_len, int isART,
                const char *filePath, FN_SIG) {
 
     IMPORT_FILE = data_sel;
@@ -199,255 +485,337 @@ void runNative(int data_sel, int idx2_sel, int idx3_sel, int idx_len,
     KEY_LEN = (data_sel == 0 ? key_len : idx_len);
     VALUE_LEN = value_len;
 
-    util::generateBitCounts();
+    char out_msg[200];
+    long start, stop;
+    size_t data_alloc_sz = (IMPORT_FILE == 0 ? (KEY_LEN + VALUE_LEN + 3) * NUM_ENTRIES
+                            : getImportFileSize(filePath) + 75000000);
+    byte *data_buf = (byte *) malloc(data_alloc_sz);
+    size_t data_sz = 0;
 
     print(filePath, cb);
 
     unordered_map<string, string> m;
-    char out_msg[200];
-    long start, stop;
     start = getTimeVal();
-    if (IMPORT_FILE == 0)
-        insert(m, cb);
-    else {
+    if (IMPORT_FILE == 0) {
+        data_sz = insert(m, data_buf, cb);
+    } else {
         NUM_ENTRIES = 0;
-        loadFile(m, filePath, cb);
+        data_sz = loadFile(m, data_buf, filePath, cb);
     }
+    if (data_alloc_sz > data_sz + 1000000)
+        data_buf = (byte *) realloc(data_buf, data_sz);
     stop = getTimeVal();
-    sprintf(out_msg, "HashMap insert time: %lf, count: %ld, size %lU\n", timedifference(start, stop), NUM_ENTRIES, m.size());
+    sprintf(out_msg, "Data load time: %lf, count: %ld, size %lU\n", timedifference(start, stop), NUM_ENTRIES, USE_HASHTABLE ? m.size() : data_sz);
     print(out_msg, cb);
     //getchar();
 
     unordered_map<string, string>::iterator it;
-    int null_ctr = 0;
-    int cmp = 0;
-
     unordered_map<string, string>::iterator it1;
-    
-    ctr = 0;
-    art_tree at;
-    art_tree_init(&at);
-    start = getTimeVal();
-    it1 = m.begin();
-    for (; it1 != m.end(); ++it1) {
-        //cout << it1->first.c_str() << endl; //<< ":" << it1->second.c_str() << endl;
-        art_insert(&at, (unsigned char*) it1->first.c_str(),
-                   (int) it1->first.length() + 1, (void *) it1->second.c_str(),
-                   (int) it1->second.length());
-        ctr++;
-    }
-    stop = getTimeVal();
-    sprintf(out_msg, "ART Insert Time: %.3lf\n", timedifference(start, stop));
-    print(out_msg, cb);
-    //getchar();
 
-    ctr = 0;
-    bplus_tree *lx;
-    switch (IDX2_SEL) {
-        case 0:
-            lx = new basix();
+    switch ((IDX2_SEL << 4) + IDX3_SEL) {
+        case 0x00:
+            runTests(isART, data_buf, data_sz, new basix(), new basix(), m, cb);
             break;
-        case 1:
-            lx = new bfos();
+        case 0x01:
+            runTests(isART, data_buf, data_sz, new basix(), new bfos(), m, cb);
             break;
-        case 2:
-            lx = new bfos();
+        case 0x02:
+            runTests(isART, data_buf, data_sz, new basix(), new bfqs(), m, cb);
             break;
-        case 3:
-            lx = new dfox();
+        case 0x03:
+            runTests(isART, data_buf, data_sz, new basix(), new dfox(), m, cb);
             break;
-        case 4:
-            lx = new dfos();
+        case 0x04:
+            runTests(isART, data_buf, data_sz, new basix(), new dfos(), m, cb);
             break;
-        case 5:
-            lx = new dfqx();
+        case 0x05:
+            runTests(isART, data_buf, data_sz, new basix(), new dfqx(), m, cb);
             break;
-        case 6:
-            lx = new bft();
+        case 0x06:
+            runTests(isART, data_buf, data_sz, new basix(), new bft(), m, cb);
             break;
-        case 7:
-            lx = new dft();
+        case 0x07:
+            runTests(isART, data_buf, data_sz, new basix(), new dft(), m, cb);
             break;
-        case 8:
-            lx = new rb_tree();
+        case 0x08:
+            runTests(isART, data_buf, data_sz, new basix(), new linex(), m, cb);
+            break;
+        case 0x09:
+            runTests(isART, data_buf, data_sz, new basix(), (rb_tree *) NULL, m, cb);
+            break;
+        case 0x10:
+            runTests(isART, data_buf, data_sz, new bfos(), new basix(), m, cb);
+            break;
+        case 0x11:
+            runTests(isART, data_buf, data_sz, new bfos(), new bfos(), m, cb);
+            break;
+        case 0x12:
+            runTests(isART, data_buf, data_sz, new bfos(), new bfqs(), m, cb);
+            break;
+        case 0x13:
+            runTests(isART, data_buf, data_sz, new bfos(), new dfox(), m, cb);
+            break;
+        case 0x14:
+            runTests(isART, data_buf, data_sz, new bfos(), new dfos(), m, cb);
+            break;
+        case 0x15:
+            runTests(isART, data_buf, data_sz, new bfos(), new dfqx(), m, cb);
+            break;
+        case 0x16:
+            runTests(isART, data_buf, data_sz, new bfos(), new bft(), m, cb);
+            break;
+        case 0x17:
+            runTests(isART, data_buf, data_sz, new bfos(), new dft(), m, cb);
+            break;
+        case 0x18:
+            runTests(isART, data_buf, data_sz, new bfos(), new linex(), m, cb);
+            break;
+        case 0x19:
+            runTests(isART, data_buf, data_sz, new bfos(), (rb_tree *) NULL, m, cb);
+            break;
+        case 0x20:
+            runTests(isART, data_buf, data_sz, new bfqs(), new basix(), m, cb);
+            break;
+        case 0x21:
+            runTests(isART, data_buf, data_sz, new bfqs(), new bfos(), m, cb);
+            break;
+        case 0x22:
+            runTests(isART, data_buf, data_sz, new bfqs(), new bfqs(), m, cb);
+            break;
+        case 0x23:
+            runTests(isART, data_buf, data_sz, new bfqs(), new dfox(), m, cb);
+            break;
+        case 0x24:
+            runTests(isART, data_buf, data_sz, new bfqs(), new dfos(), m, cb);
+            break;
+        case 0x25:
+            runTests(isART, data_buf, data_sz, new bfqs(), new dfqx(), m, cb);
+            break;
+        case 0x26:
+            runTests(isART, data_buf, data_sz, new bfqs(), new bft(), m, cb);
+            break;
+        case 0x27:
+            runTests(isART, data_buf, data_sz, new bfqs(), new dft(), m, cb);
+            break;
+        case 0x28:
+            runTests(isART, data_buf, data_sz, new bfqs(), new linex(), m, cb);
+            break;
+        case 0x29:
+            runTests(isART, data_buf, data_sz, new bfqs(), (rb_tree *) NULL, m, cb);
+            break;
+        case 0x30:
+            runTests(isART, data_buf, data_sz, new dfox(), new basix(), m, cb);
+            break;
+        case 0x31:
+            runTests(isART, data_buf, data_sz, new dfox(), new bfos(), m, cb);
+            break;
+        case 0x32:
+            runTests(isART, data_buf, data_sz, new dfox(), new bfqs(), m, cb);
+            break;
+        case 0x33:
+            runTests(isART, data_buf, data_sz, new dfox(), new dfox(), m, cb);
+            break;
+        case 0x34:
+            runTests(isART, data_buf, data_sz, new dfox(), new dfos(), m, cb);
+            break;
+        case 0x35:
+            runTests(isART, data_buf, data_sz, new dfox(), new dfqx(), m, cb);
+            break;
+        case 0x36:
+            runTests(isART, data_buf, data_sz, new dfox(), new bft(), m, cb);
+            break;
+        case 0x37:
+            runTests(isART, data_buf, data_sz, new dfox(), new dft(), m, cb);
+            break;
+        case 0x38:
+            runTests(isART, data_buf, data_sz, new dfox(), new linex(), m, cb);
+            break;
+        case 0x39:
+            runTests(isART, data_buf, data_sz, new dfox(), (rb_tree *) NULL, m, cb);
+            break;
+        case 0x40:
+            runTests(isART, data_buf, data_sz, new dfos(), new basix(), m, cb);
+            break;
+        case 0x41:
+            runTests(isART, data_buf, data_sz, new dfos(), new bfos(), m, cb);
+            break;
+        case 0x42:
+            runTests(isART, data_buf, data_sz, new dfos(), new bfqs(), m, cb);
+            break;
+        case 0x43:
+            runTests(isART, data_buf, data_sz, new dfos(), new dfox(), m, cb);
+            break;
+        case 0x44:
+            runTests(isART, data_buf, data_sz, new dfos(), new dfos(), m, cb);
+            break;
+        case 0x45:
+            runTests(isART, data_buf, data_sz, new dfos(), new dfqx(), m, cb);
+            break;
+        case 0x46:
+            runTests(isART, data_buf, data_sz, new dfos(), new bft(), m, cb);
+            break;
+        case 0x47:
+            runTests(isART, data_buf, data_sz, new dfos(), new dft(), m, cb);
+            break;
+        case 0x48:
+            runTests(isART, data_buf, data_sz, new dfos(), new linex(), m, cb);
+            break;
+        case 0x49:
+            runTests(isART, data_buf, data_sz, new dfos(), (rb_tree *) NULL, m, cb);
+            break;
+        case 0x50:
+            runTests(isART, data_buf, data_sz, new dfqx(), new basix(), m, cb);
+            break;
+        case 0x51:
+            runTests(isART, data_buf, data_sz, new dfqx(), new bfos(), m, cb);
+            break;
+        case 0x52:
+            runTests(isART, data_buf, data_sz, new dfqx(), new bfqs(), m, cb);
+            break;
+        case 0x53:
+            runTests(isART, data_buf, data_sz, new dfqx(), new dfox(), m, cb);
+            break;
+        case 0x54:
+            runTests(isART, data_buf, data_sz, new dfqx(), new dfos(), m, cb);
+            break;
+        case 0x55:
+            runTests(isART, data_buf, data_sz, new dfqx(), new dfqx(), m, cb);
+            break;
+        case 0x56:
+            runTests(isART, data_buf, data_sz, new dfqx(), new bft(), m, cb);
+            break;
+        case 0x57:
+            runTests(isART, data_buf, data_sz, new dfqx(), new dft(), m, cb);
+            break;
+        case 0x58:
+            runTests(isART, data_buf, data_sz, new dfqx(), new linex(), m, cb);
+            break;
+        case 0x59:
+            runTests(isART, data_buf, data_sz, new dfqx(), (rb_tree *) NULL, m, cb);
+            break;
+        case 0x60:
+            runTests(isART, data_buf, data_sz, new bft(), new basix(), m, cb);
+            break;
+        case 0x61:
+            runTests(isART, data_buf, data_sz, new bft(), new bfos(), m, cb);
+            break;
+        case 0x62:
+            runTests(isART, data_buf, data_sz, new bft(), new bfqs(), m, cb);
+            break;
+        case 0x63:
+            runTests(isART, data_buf, data_sz, new bft(), new dfox(), m, cb);
+            break;
+        case 0x64:
+            runTests(isART, data_buf, data_sz, new bft(), new dfos(), m, cb);
+            break;
+        case 0x65:
+            runTests(isART, data_buf, data_sz, new bft(), new dfqx(), m, cb);
+            break;
+        case 0x66:
+            runTests(isART, data_buf, data_sz, new bft(), new bft(), m, cb);
+            break;
+        case 0x67:
+            runTests(isART, data_buf, data_sz, new bft(), new dft(), m, cb);
+            break;
+        case 0x68:
+            runTests(isART, data_buf, data_sz, new bft(), new linex(), m, cb);
+            break;
+        case 0x69:
+            runTests(isART, data_buf, data_sz, new bft(), (rb_tree *) NULL, m, cb);
+            break;
+        case 0x70:
+            runTests(isART, data_buf, data_sz, new dft(), new basix(), m, cb);
+            break;
+        case 0x71:
+            runTests(isART, data_buf, data_sz, new dft(), new bfos(), m, cb);
+            break;
+        case 0x72:
+            runTests(isART, data_buf, data_sz, new dft(), new bfqs(), m, cb);
+            break;
+        case 0x73:
+            runTests(isART, data_buf, data_sz, new dft(), new dfox(), m, cb);
+            break;
+        case 0x74:
+            runTests(isART, data_buf, data_sz, new dft(), new dfos(), m, cb);
+            break;
+        case 0x75:
+            runTests(isART, data_buf, data_sz, new dft(), new dfqx(), m, cb);
+            break;
+        case 0x76:
+            runTests(isART, data_buf, data_sz, new dft(), new bft(), m, cb);
+            break;
+        case 0x77:
+            runTests(isART, data_buf, data_sz, new dft(), new dft(), m, cb);
+            break;
+        case 0x78:
+            runTests(isART, data_buf, data_sz, new dft(), new linex(), m, cb);
+            break;
+        case 0x79:
+            runTests(isART, data_buf, data_sz, new dft(), (rb_tree *) NULL, m, cb);
+            break;
+        case 0x80:
+            runTests(isART, data_buf, data_sz, new linex(), new basix(), m, cb);
+            break;
+        case 0x81:
+            runTests(isART, data_buf, data_sz, new linex(), new bfos(), m, cb);
+            break;
+        case 0x82:
+            runTests(isART, data_buf, data_sz, new linex(), new bfqs(), m, cb);
+            break;
+        case 0x83:
+            runTests(isART, data_buf, data_sz, new linex(), new dfox(), m, cb);
+            break;
+        case 0x84:
+            runTests(isART, data_buf, data_sz, new linex(), new dfos(), m, cb);
+            break;
+        case 0x85:
+            runTests(isART, data_buf, data_sz, new linex(), new dfqx(), m, cb);
+            break;
+        case 0x86:
+            runTests(isART, data_buf, data_sz, new linex(), new bft(), m, cb);
+            break;
+        case 0x87:
+            runTests(isART, data_buf, data_sz, new linex(), new dft(), m, cb);
+            break;
+        case 0x88:
+            runTests(isART, data_buf, data_sz, new linex(), new linex(), m, cb);
+            break;
+        case 0x89:
+            runTests(isART, data_buf, data_sz, new linex(), (rb_tree *) NULL, m, cb);
+            break;
+        case 0x90:
+            runTests(isART, data_buf, data_sz, (rb_tree *) NULL, new basix(), m, cb);
+            break;
+        case 0x91:
+            runTests(isART, data_buf, data_sz, (rb_tree *) NULL, new bfos(), m, cb);
+            break;
+        case 0x92:
+            runTests(isART, data_buf, data_sz, (rb_tree *) NULL, new bfqs(), m, cb);
+            break;
+        case 0x93:
+            runTests(isART, data_buf, data_sz, (rb_tree *) NULL, new dfox(), m, cb);
+            break;
+        case 0x94:
+            runTests(isART, data_buf, data_sz, (rb_tree *) NULL, new dfos(), m, cb);
+            break;
+        case 0x95:
+            runTests(isART, data_buf, data_sz, (rb_tree *) NULL, new dfqx(), m, cb);
+            break;
+        case 0x96:
+            runTests(isART, data_buf, data_sz, (rb_tree *) NULL, new bft(), m, cb);
+            break;
+        case 0x97:
+            runTests(isART, data_buf, data_sz, (rb_tree *) NULL, new dft(), m, cb);
+            break;
+        case 0x98:
+            runTests(isART, data_buf, data_sz, (rb_tree *) NULL, new linex(), m, cb);
+            break;
+        case 0x99:
+            runTests(isART, data_buf, data_sz, (rb_tree *) NULL, (rb_tree *) NULL, m, cb);
             break;
         default:
-            lx = new basix();
+            runTests(isART, data_buf, data_sz, new basix(), new bfos(), m, cb);
             break;
     }
-    it1 = m.begin();
-    start = getTimeVal();
-    for (; it1 != m.end(); ++it1) {
-        //cout << it1->first.c_str() << ":" << it1->second.c_str() << endl;
-        lx->put(it1->first.c_str(), (int16_t) it1->first.length(), it1->second.c_str(),
-                (int16_t) it1->second.length());
-        ctr++;
-    }
-    stop = getTimeVal();
-    sprintf(out_msg, "Ix1 Insert Time: %.3lf\n", timedifference(start, stop));
-    print(out_msg, cb);
-    //getchar();
-
-    ctr = 0;
-    bplus_tree *dx;
-    switch (IDX3_SEL) {
-        case 0:
-            dx = new basix();
-            break;
-        case 1:
-            dx = new bfos();
-            break;
-        case 2:
-            dx = new bfos();
-            break;
-        case 3:
-            dx = new dfox();
-            break;
-        case 4:
-            dx = new dfos();
-            break;
-        case 5:
-            dx = new dfqx();
-            break;
-        case 6:
-            dx = new bft();
-            break;
-        case 7:
-            dx = new dft();
-            break;
-        case 8:
-            dx = new rb_tree();
-            break;
-        default:
-            dx = new basix();
-            break;
-    }
-    it1 = m.begin();
-    start = getTimeVal();
-    for (; it1 != m.end(); ++it1) {
-        dx->put(it1->first.c_str(), (int16_t) it1->first.length(), it1->second.c_str(),
-                (int16_t) it1->second.length());
-        ctr++;
-    }
-    stop = getTimeVal();
-    sprintf(out_msg, "Ix2 Insert Time: %.3lf\n", timedifference(start, stop));
-    print(out_msg, cb);
-    //getchar();
-
-    cmp = 0;
-    ctr = 0;
-    null_ctr = 0;
-    it1 = m.begin();
-    start = getTimeVal();
-    for (; it1 != m.end(); ++it1) {
-        int len;
-        char *value = (char *) art_search(&at,
-                                          (unsigned char*) it1->first.c_str(), (int) it1->first.length() + 1,
-                                          &len);
-        char v[100];
-        if (value == null) {
-            null_ctr++;
-        } else {
-            int16_t d = util::compare(it1->second.c_str(), (int16_t) it1->second.length(),
-                                      value, (int16_t) len);
-            if (d != 0) {
-                cmp++;
-                strncpy(v, value, (size_t) len);
-                v[it1->first.length()] = 0;
-                sprintf(out_msg, "%d:%s:==========:%s:==========>%s\n", cmp, it1->first.c_str(),
-                        it1->second.c_str(), v);
-                print(out_msg, cb);
-            }
-        }
-        ctr++;
-    }
-    stop = getTimeVal();
-    sprintf(out_msg, "ART Get Time: %.3lf\n", timedifference(start, stop));
-    print(out_msg, cb);
-    sprintf(out_msg, "Null: %d, Cmp: %d\n", null_ctr, cmp);
-    print(out_msg, cb);
-    //getchar();
-
-    cmp = 0;
-    ctr = 0;
-    null_ctr = 0;
-    it1 = m.begin();
-    start = getTimeVal();
-    for (; it1 != m.end(); ++it1) {
-        int16_t len;
-        char *value = lx->get(it1->first.c_str(), (int16_t) it1->first.length(), &len);
-        char v[100];
-        if (value == null) {
-            null_ctr++;
-        } else {
-            int16_t d = util::compare(it1->second.c_str(), (int16_t) it1->second.length(),
-                                      value, len);
-            if (d != 0) {
-                cmp++;
-                strncpy(v, value, (size_t) len);
-                v[len] = 0;
-                sprintf(out_msg, "%d:%s:==========:%s:==========>%s\n", cmp, it1->first.c_str(),
-                        it1->second.c_str(), v);
-                print(out_msg, cb);
-            } // else {
-            //    strncpy(v, value, len);
-            //    v[len] = 0;
-            //    cout << v << endl;
-            //}
-        }
-        ctr++;
-    }
-    stop = getTimeVal();
-    sprintf(out_msg, "Ix1 Get Time: %.3lf\n", timedifference(start, stop));
-    print(out_msg, cb);
-    sprintf(out_msg, "Null: %d, Cmp: %d\n", null_ctr, cmp);
-    print(out_msg, cb);
-    lx->printMaxKeyCount(NUM_ENTRIES);
-    lx->printNumLevels();
-    //lx->printCounts();
-    sprintf(out_msg, "Root filled size: %d\n", util::getInt(lx->root_data + 1));
-    print(out_msg, cb);
-
-    cmp = 0;
-    ctr = 0;
-    null_ctr = 0;
-    //bfos::count = 0;
-    it1 = m.begin();
-    start = getTimeVal();
-    for (; it1 != m.end(); ++it1) {
-        int16_t len;
-        char *value = dx->get(it1->first.c_str(), (int16_t) it1->first.length(), &len);
-        char v[100];
-        if (value == null) {
-            cout << "Null:" << it1->first.c_str() << endl;
-            null_ctr++;
-        } else {
-            int16_t d = util::compare(it1->second.c_str(), (int16_t) it1->second.length(),
-                                      value, len);
-            if (d != 0) {
-                cmp++;
-                strncpy(v, value, (size_t) len);
-                v[it1->first.length()] = 0;
-                sprintf(out_msg, "%d:%s:==========:%s:==========>%s\n", cmp, it1->first.c_str(),
-                        it1->second.c_str(), v);
-                print(out_msg, cb);
-            }
-        }
-        ctr++;
-    }
-    stop = getTimeVal();
-    sprintf(out_msg, "Ix2 Get Time: %.3lf\n", timedifference(start, stop));
-    print(out_msg, cb);
-    sprintf(out_msg, "Null: %d, Cmp: %d\n", null_ctr, cmp);
-    print(out_msg, cb);
-    sprintf(out_msg, "Trie Size: %d\n", (int) dx->root_data[MAX_PTR_BITMAP_BYTES + 5]);
-    print(out_msg, cb);
-    sprintf(out_msg, "Root filled size: %d\n", (int) util::getInt(dx->root_data + MAX_PTR_BITMAP_BYTES + 1));
-    print(out_msg, cb);
-    sprintf(out_msg, "Data Pos: %d\n", (int) util::getInt(dx->root_data + MAX_PTR_BITMAP_BYTES + 3));
-    print(out_msg, cb);
-    dx->printMaxKeyCount(NUM_ENTRIES);
-    dx->printNumLevels();
-    //dx->printCounts();
 
 }
